@@ -2,6 +2,7 @@
 // sahilchat-fca — sendMessage
 // Author: S4hiilAns4ri (github.com/S4hiilAns4ri)
 // Supports: Group thread IDs of any length (15, 16, 17, 18, 19... digits)
+// Supports: Both callback style and Promise/await style
 
 const utils = require('../../../utils');
 
@@ -62,7 +63,6 @@ module.exports = (defaultFuncs, api, ctx) => {
     const tid = String(threadID);
 
     if (Array.isArray(threadID)) {
-      // Create new group with list of user IDs
       threadID.forEach((id, idx) => { form[`specific_to_list[${idx}]`] = "fbid:" + id; });
       form[`specific_to_list[${threadID.length}]`] = "fbid:" + ctx.userID;
       form["client_thread_id"] = "root:" + messageAndOTID;
@@ -106,116 +106,140 @@ module.exports = (defaultFuncs, api, ctx) => {
   /**
    * Send a message to a Facebook group thread.
    *
-   * NOTE: Facebook DM/Inbox is end-to-end encrypted (E2EE) and no longer
-   * supported by this API. Only group thread IDs work.
+   * Supports both callback and Promise/await style:
    *
-   * @param {string|object}        msg           — Text string or message object {body, sticker, attachment, url, emoji, mentions, location}
-   * @param {string|number|Array}  threadID      — Group thread ID (any digit length: 15, 16, 17, 18, 19...) or array of user IDs to create new group
-   * @param {string}               [replyToMessage] — Message ID to reply to a specific message (optional)
+   *   api.sendMessage("Hello!", threadID, callback)          // callback style
+   *   await api.sendMessage("Hello!", threadID)              // promise style
+   *   api.sendMessage("Reply!", threadID, msgID, callback)   // reply + callback
+   *   await api.sendMessage("Reply!", threadID, msgID)       // reply + promise
    *
-   * @example
-   * // Send text to group
-   * api.sendMessage("Hello group!", "123456789012345");
-   *
-   * // Send sticker to group
-   * api.sendMessage({ sticker: "369239263222822" }, "123456789012345");
-   *
-   * // Reply to a specific message in group
-   * api.sendMessage("Reply!", groupThreadID, messageID);
-   *
-   * // Create new group from user IDs (array)
-   * api.sendMessage("Hello new group!", ["uid1", "uid2", "uid3"]);
+   * @param {string|object}   msg              — text string or {body, sticker, attachment, url, emoji, mentions, location}
+   * @param {string|Array}    threadID         — group thread ID (any length) or array of userIDs to create new group
+   * @param {string|Function} [replyOrCallback]— optional: message ID to reply to, OR callback function(err, info)
+   * @param {Function}        [callback]       — optional: callback(err, info) when replyToMessage is provided
    */
-  return async (msg, threadID, replyToMessage) => {
-    const msgType = utils.getType(msg);
-    if (msgType !== "String" && msgType !== "Object") {
-      throw new Error("Message must be a string or object, got: " + msgType);
+  return (msg, threadID, replyOrCallback, callbackArg) => {
+
+    // ── Resolve replyToMessage vs callback ───────────────────────
+    let replyToMessage = null;
+    let callback       = null;
+
+    if (typeof replyOrCallback === 'function') {
+      // sendMessage(msg, threadID, callback)
+      callback = replyOrCallback;
+    } else if (typeof replyOrCallback === 'string') {
+      // sendMessage(msg, threadID, replyMsgID)  or  sendMessage(msg, threadID, replyMsgID, callback)
+      replyToMessage = replyOrCallback;
+      if (typeof callbackArg === 'function') callback = callbackArg;
     }
-    if (msgType === "String") msg = { body: msg };
 
-    const disallowed = Object.keys(msg).filter(p => !allowedProperties[p]);
-    if (disallowed.length > 0) throw new Error("Disallowed message properties: " + disallowed.join(", "));
+    // ── Core send logic (async) ──────────────────────────────────
+    const doSend = async () => {
+      const msgType = utils.getType(msg);
+      if (msgType !== "String" && msgType !== "Object") {
+        throw new Error("Message must be a string or object, got: " + msgType);
+      }
+      if (msgType === "String") msg = { body: msg };
 
-    if (replyToMessage && utils.getType(replyToMessage) !== 'String') {
-      throw new Error("replyToMessage must be a string message ID.");
-    }
+      const disallowed = Object.keys(msg).filter(p => !allowedProperties[p]);
+      if (disallowed.length > 0) {
+        throw new Error("Disallowed message properties: " + disallowed.join(", "));
+      }
 
-    const messageAndOTID = utils.generateOfflineThreadingID();
-    const form = {
-      client                          : "mercury",
-      action_type                     : "ma-type:user-generated-message",
-      author                          : "fbid:" + ctx.userID,
-      timestamp                       : Date.now(),
-      timestamp_absolute              : "Today",
-      timestamp_relative              : utils.generateTimestampRelative(),
-      timestamp_time_passed           : "0",
-      is_unread                       : false,
-      is_cleared                      : false,
-      is_forward                      : false,
-      is_filtered_content             : false,
-      is_filtered_content_bh          : false,
-      is_filtered_content_account     : false,
-      is_filtered_content_quasar      : false,
-      is_filtered_content_invalid_app : false,
-      is_spoof_warning                : false,
-      source                          : "source:chat:web",
-      "source_tags[0]"                : "source:chat",
-      ...(msg.body && { body: msg.body }),
-      html_body                       : false,
-      ui_push_phase                   : "V3",
-      status                          : "0",
-      offline_threading_id            : messageAndOTID,
-      message_id                      : messageAndOTID,
-      threading_id                    : utils.generateThreadingID(ctx.clientID),
-      "ephemeral_ttl_mode:"           : "0",
-      manual_retry_cnt                : "0",
-      has_attachment                  : !!(msg.attachment || msg.url || msg.sticker),
-      signatureID                     : utils.getSignatureID(),
-      ...(replyToMessage && { replied_to_message_id: replyToMessage }),
+      const messageAndOTID = utils.generateOfflineThreadingID();
+      const form = {
+        client                          : "mercury",
+        action_type                     : "ma-type:user-generated-message",
+        author                          : "fbid:" + ctx.userID,
+        timestamp                       : Date.now(),
+        timestamp_absolute              : "Today",
+        timestamp_relative              : utils.generateTimestampRelative(),
+        timestamp_time_passed           : "0",
+        is_unread                       : false,
+        is_cleared                      : false,
+        is_forward                      : false,
+        is_filtered_content             : false,
+        is_filtered_content_bh          : false,
+        is_filtered_content_account     : false,
+        is_filtered_content_quasar      : false,
+        is_filtered_content_invalid_app : false,
+        is_spoof_warning                : false,
+        source                          : "source:chat:web",
+        "source_tags[0]"                : "source:chat",
+        ...(msg.body && { body: msg.body }),
+        html_body                       : false,
+        ui_push_phase                   : "V3",
+        status                          : "0",
+        offline_threading_id            : messageAndOTID,
+        message_id                      : messageAndOTID,
+        threading_id                    : utils.generateThreadingID(ctx.clientID),
+        "ephemeral_ttl_mode:"           : "0",
+        manual_retry_cnt                : "0",
+        has_attachment                  : !!(msg.attachment || msg.url || msg.sticker),
+        signatureID                     : utils.getSignatureID(),
+        ...(replyToMessage && { replied_to_message_id: replyToMessage }),
+      };
+
+      if (msg.location) {
+        if (!msg.location.latitude || !msg.location.longitude) {
+          throw new Error("location needs both latitude and longitude.");
+        }
+        form["location_attachment[coordinates][latitude]"]  = msg.location.latitude;
+        form["location_attachment[coordinates][longitude]"] = msg.location.longitude;
+        form["location_attachment[is_current_location]"]    = !!msg.location.current;
+      }
+
+      if (msg.sticker) form["sticker_id"] = msg.sticker;
+
+      if (msg.attachment) {
+        form.image_ids = []; form.gif_ids = []; form.file_ids = [];
+        form.video_ids = []; form.audio_ids = [];
+        if (utils.getType(msg.attachment) !== "Array") msg.attachment = [msg.attachment];
+        const files = await uploadAttachment(msg.attachment);
+        files.forEach(file => {
+          const type = Object.keys(file)[0];
+          form[type + "s"].push(file[type]);
+        });
+      }
+
+      if (msg.url) {
+        form["shareable_attachment[share_type]"]   = "100";
+        form["shareable_attachment[share_params]"] = await getUrl(msg.url);
+      }
+
+      if (msg.emoji) {
+        if (!msg.emojiSize) msg.emojiSize = "medium";
+        if (!["small","medium","large"].includes(msg.emojiSize)) {
+          throw new Error("emojiSize must be small, medium, or large.");
+        }
+        if (!form.body) throw new Error("body must not be empty when using emoji.");
+        form.body = msg.emoji;
+        form["tags[0]"] = "hot_emoji_size:" + msg.emojiSize;
+      }
+
+      if (msg.mentions) {
+        for (let i = 0; i < msg.mentions.length; i++) {
+          const { tag, id, fromIndex } = msg.mentions[i];
+          if (typeof tag !== "string") throw new Error("Mention tags must be strings.");
+          const offset = msg.body.indexOf(tag, fromIndex || 0);
+          if (offset < 0) utils.warn("sendMessage", `Mention "${tag}" not found in body.`);
+          const emptyChar = '\u200E';
+          form["body"]                              = emptyChar + msg.body;
+          form[`profile_xmd[${i}][offset]`]        = offset + 1;
+          form[`profile_xmd[${i}][length]`]        = tag.length;
+          form[`profile_xmd[${i}][id]`]            = id || 0;
+          form[`profile_xmd[${i}][type]`]          = "p";
+        }
+      }
+
+      return sendContent(form, threadID, messageAndOTID);
     };
 
-    if (msg.location) {
-      if (!msg.location.latitude || !msg.location.longitude) throw new Error("location needs both latitude and longitude.");
-      form["location_attachment[coordinates][latitude]"]  = msg.location.latitude;
-      form["location_attachment[coordinates][longitude]"] = msg.location.longitude;
-      form["location_attachment[is_current_location]"]    = !!msg.location.current;
+    // ── Return Promise OR call callback ──────────────────────────
+    if (callback) {
+      doSend().then(info => callback(null, info)).catch(err => callback(err));
+    } else {
+      return doSend();
     }
-    if (msg.sticker)  form["sticker_id"] = msg.sticker;
-    if (msg.attachment) {
-      form.image_ids = []; form.gif_ids = []; form.file_ids = []; form.video_ids = []; form.audio_ids = [];
-      if (utils.getType(msg.attachment) !== "Array") msg.attachment = [msg.attachment];
-      const files = await uploadAttachment(msg.attachment);
-      files.forEach(file => {
-        const type = Object.keys(file)[0];
-        form[type + "s"].push(file[type]);
-      });
-    }
-    if (msg.url) {
-      form["shareable_attachment[share_type]"]   = "100";
-      form["shareable_attachment[share_params]"] = await getUrl(msg.url);
-    }
-    if (msg.emoji) {
-      if (!msg.emojiSize) msg.emojiSize = "medium";
-      if (!["small","medium","large"].includes(msg.emojiSize)) throw new Error("emojiSize must be small, medium, or large.");
-      if (!form.body) throw new Error("body must not be empty when using emoji.");
-      form.body = msg.emoji;
-      form["tags[0]"] = "hot_emoji_size:" + msg.emojiSize;
-    }
-    if (msg.mentions) {
-      for (let i = 0; i < msg.mentions.length; i++) {
-        const { tag, id, fromIndex } = msg.mentions[i];
-        if (typeof tag !== "string") throw new Error("Mention tags must be strings.");
-        const offset = msg.body.indexOf(tag, fromIndex || 0);
-        if (offset < 0) utils.warn("sendMessage", `Mention "${tag}" not found in body.`);
-        const emptyChar = '\u200E';
-        form["body"]                              = emptyChar + msg.body;
-        form[`profile_xmd[${i}][offset]`]        = offset + 1;
-        form[`profile_xmd[${i}][length]`]        = tag.length;
-        form[`profile_xmd[${i}][id]`]            = id || 0;
-        form[`profile_xmd[${i}][type]`]          = "p";
-      }
-    }
-
-    return sendContent(form, threadID, messageAndOTID);
   };
 };
