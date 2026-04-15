@@ -19,7 +19,7 @@
 ## Installation
 
 ```bash
-npm install
+npm install sahilchat-fca
 ```
 
 Requires **Node.js 18 or higher**.
