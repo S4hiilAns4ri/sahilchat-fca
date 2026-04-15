@@ -1,14 +1,18 @@
 # sahilchat-fca
 
-```
- ____    _  _   _ ___ _     ____ _   _    _  _____   _____ ____    _
-/ ___|  | || | | |_ _| |   / ___| | | |  / \|_   _| |  ___/ ___|  / \
-\___ \  | || |_| || || |  | |   | |_| | / _ \ | |   | |_ | |     / _ \
- ___) | |_||  _  || || |__| |___|  _  |/ ___ \| |   |  _|| |___ / ___ \
-|____/  |_||_| |_|___|_____\____|_| |_/_/   \_\_|   |_|   \____/_/   \_\
-```
+<p align="center">
+  <img src="https://raw.githubusercontent.com/S4hiilAns4ri/sahilchat-fca/main/assets/preview.png" alt="sahilchat-fca" width="100%" />
+</p>
 
-**Author:** [S4hiilAns4ri](https://github.com/S4hiilAns4ri)
+<p align="center">
+  <b>Author:</b> <a href="https://github.com/S4hiilAns4ri">S4hiilAns4ri</a>
+  &nbsp;|&nbsp;
+  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node" />
+  &nbsp;
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT" />
+  &nbsp;
+  <img src="https://img.shields.io/badge/platform-Facebook%20Groups-1877F2" alt="Facebook Groups" />
+</p>
 
 > A Facebook Group Chat API for Node.js.
 > Facebook DM / Inbox is **end-to-end encrypted (E2EE)** — no API can access it.
