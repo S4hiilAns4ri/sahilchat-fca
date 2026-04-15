@@ -115,17 +115,23 @@ async function createContent(defaultFuncs, ctx, form) {
             doc_id: 6993516810709754
         })
         .then(utils.parseAndCheckLogin(ctx, defaultFuncs));
-    
-    if (res.errors) {
-        throw res;
+
+    // Hard error from Facebook — comment was NOT sent
+    if (res.errors && res.errors.length > 0) {
+        throw new Error(res.errors[0].message || JSON.stringify(res.errors[0]));
     }
-    
-    const commentEdge = res.data.comment_create.feedback_comment_edge;
-    return {
-        id: commentEdge.node.id,
-        url: commentEdge.node.feedback.url,
-        count: res.data.comment_create.feedback.total_comment_count
-    };
+
+    // Try to extract comment info from response
+    try {
+        const commentEdge = res?.data?.comment_create?.feedback_comment_edge;
+        const id    = commentEdge?.node?.id    || null;
+        const url   = commentEdge?.node?.feedback?.url || null;
+        const count = res?.data?.comment_create?.feedback?.total_comment_count || 0;
+        return { id, url, count };
+    } catch (_) {
+        // Comment went through but response structure was unexpected — still a success
+        return { id: null, url: null, count: 0 };
+    }
 }
 
 /**
