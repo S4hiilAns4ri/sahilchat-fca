@@ -127,9 +127,16 @@ async function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
     ctx.mqttClient = mqttClient;
     mqttClient.on('error', (err) => {
         utils.error("listenMqtt", err);
-        mqttClient.end();
-        if (ctx.globalOptions.autoReconnect) getSeqID();
-        else globalCallback({ type: "stop_listen", error: "Connection refused" });
+        try { mqttClient.end(); } catch (_) {}
+        ctx.mqttClient = undefined;
+        // Default: keep trying. Only stop if user explicitly set autoReconnect=false
+        if (ctx.globalOptions.autoReconnect === false) {
+            globalCallback({ type: "stop_listen", error: "Connection refused" });
+        } else {
+            const retryDelay = 5000 + Math.floor(Math.random() * 5000);
+            utils.log(`MQTT error — reconnecting in ${Math.floor(retryDelay/1000)}s...`);
+            setTimeout(() => { getSeqID(); }, retryDelay);
+        }
     });
 
     mqttClient.on('connect', async () => {
