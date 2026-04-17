@@ -40,9 +40,9 @@ function formatEventReminders(reminder) {
  * @returns {Object | null} A formatted thread object or null if data is invalid.
  */
 function formatThreadGraphQLResponse(data) {
-  if (data.errors) return null;
+  if (!data || data.errors) return null;
   const messageThread = data.message_thread;
-  if (!messageThread) return null;
+  if (!messageThread || !messageThread.thread_key) return null;
 
   const threadID = messageThread.thread_key.thread_fbid
     ? messageThread.thread_key.thread_fbid
@@ -193,9 +193,14 @@ module.exports = function (defaultFuncs, api, ctx) {
         const threadInfos = {};
         for (let i = resData.length - 2; i >= 0; i--) {
             const res = resData[i];
-            if (res.error_results) continue;
-            
-            const threadInfo = formatThreadGraphQLResponse(res[Object.keys(res)[0]].data);
+            if (!res || res.error_results) continue;
+
+            const keys = Object.keys(res);
+            if (!keys.length) continue;
+            const inner = res[keys[0]];
+            if (!inner || !inner.data) continue;
+
+            const threadInfo = formatThreadGraphQLResponse(inner.data);
             if (threadInfo) {
                 threadInfos[threadInfo.threadID || threadID[threadID.length - 1 - i]] = threadInfo;
             }
