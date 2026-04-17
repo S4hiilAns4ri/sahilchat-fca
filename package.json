@@ -1,6 +1,6 @@
 {
   "name": "sahilchat-fca",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "module": "commonjs",
   "types": "src/types/index.d.ts",
   "description": "sahilchat-fca — A powerful Facebook Chat API for Node.js. Supports cookie string login, 15 and 16 digit group messaging, stickers, reactions, and more. A Facebook Group Chat API for Node.js. Built by S4hiilAns4ri.",
