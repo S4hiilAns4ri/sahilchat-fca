@@ -22,7 +22,7 @@ module.exports = function (defaultFuncs, api, ctx) {
     let _resolve, _reject;
     const returnPromise = new Promise((resolve, reject) => { _resolve = resolve; _reject = reject; });
 
-    if (typeof callback === "Function" || typeof callback === "AsyncFunction") {
+    if (utils.getType(callback) === "Function" || utils.getType(callback) === "AsyncFunction") {
       _callback    = callback;
       _initiatorID = initiatorID;
     } else if (typeof callback === "string") {
